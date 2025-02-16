@@ -1,0 +1,85 @@
+# Ignore Visual Studio specific files
+.vs/
+*.user
+*.suo
+*.sln.docstates
+*.vssscc
+
+# Ignore build outputs
+bin/
+obj/
+out/
+*.exe
+*.dll
+*.pdb
+*.appx
+*.appxbundle
+*.msi
+*.nupkg
+*.snupkg
+
+# Ignore Rider IDE files
+.idea/
+*.sln.iml
+
+# Ignore JetBrains Rider/Resharper files
+*.DotSettings.user
+
+# Ignore MonoDevelop/Xamarin Studio files
+*.pidb
+*.userprefs
+
+# Ignore ASP.NET specific files
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Ignore NuGet packages
+*.nupkg
+packages/
+.nuget/
+
+# Ignore Entity Framework migrations
+Migrations/
+
+# Ignore temporary files
+*.tmp
+*.bak
+*.swp
+
+# Ignore logs and database files
+*.log
+*.sql
+*.sqlite
+
+# Ignore secrets and user configurations
+appsettings.json
+appsettings.*.json
+secrets.json
+.env
+
+# Ignore test results
+TestResults/
+*.trx
+
+# Ignore coverage reports
+coverage/
+*.coverage
+*.coverlet
+
+# Ignore compiled Python scripts if using Python in the project
+*.pyc
+
+# Ignore Code Coverage tools
+coverage.opencover.xml
+coverage.cobertura.xml
+
+# Ignore Docker-related files
+**/[Dd]ocker*
+
+# Ignore macOS files
+.DS_Store
+
+# Ignore Windows files
+Thumbs.db
+Desktop.ini
