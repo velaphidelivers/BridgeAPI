@@ -16,10 +16,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+app.UseMiddleware<CorrelationIdMiddleware>();
 
 app.MapGet("/health", () =>
 {
@@ -28,7 +25,6 @@ app.MapGet("/health", () =>
 })
 .WithName("GetHealthStatus")
 .WithOpenApi();
-
 app.Run();
 
 record HealthStatus(string Status, DateTime CheckedAt);
