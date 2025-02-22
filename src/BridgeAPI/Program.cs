@@ -25,6 +25,10 @@ app.MapGet("/health", () =>
 })
 .WithName("GetHealthStatus")
 .WithOpenApi();
+
+// Configure the HTTP request pipeline
+app.UseMiddleware<RoutingMiddleware>();
+
 app.Run();
 
 record HealthStatus(string Status, DateTime CheckedAt);
