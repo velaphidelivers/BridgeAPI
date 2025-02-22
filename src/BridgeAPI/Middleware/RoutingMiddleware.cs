@@ -10,7 +10,7 @@ public class RoutingMiddleware
     private readonly RequestDelegate _next;
 
 
-    public RoutingMiddleware(RequestDelegate next, IConfiguration config, IAllowUrls allowUrls, ITokenService systemSecurity)
+    public RoutingMiddleware(RequestDelegate next)
     {
         _next = next ?? throw new ArgumentNullException(nameof(next));
     }
