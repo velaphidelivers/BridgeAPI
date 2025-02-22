@@ -44,7 +44,7 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseMiddleware<RoutingMiddleware>();
-app.ConfigureExceptionHandler();
+//app.ConfigureExceptionHandler();
 app.MapGet("/health", () =>
 {
     var healthStatus = new HealthStatus("Healthy", DateTime.Now);
