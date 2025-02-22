@@ -196,10 +196,7 @@ public class RoutingMiddleware
                 return;
             }
         }
-        else
-        {
-            // Pass control to the next middleware in the pipeline
-            await _next(context);
-        }
+        // Pass control to the next middleware in the pipeline
+        await _next(context);
     }
 }
