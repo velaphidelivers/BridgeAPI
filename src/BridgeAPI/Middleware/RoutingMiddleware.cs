@@ -21,7 +21,6 @@ public class RoutingMiddleware
             return;
         }
 
-        //check if path is allowed otherwise skip. 
         if (_allowedUrls.IsAllowed(context.Request.Path.Value.Substring(1)))
         {
             context.Response.StatusCode = StatusCodes.Status200OK;
@@ -29,9 +28,6 @@ public class RoutingMiddleware
             return;
         }
 
-        // Return 403 for unsupported URLs
-        /*       context.Response.StatusCode = StatusCodes.Status403Forbidden;
-              await context.Response.WriteAsync("URL not supported"); */
         context.Response.StatusCode = StatusCodes.Status403Forbidden;
         await context.Response.WriteAsJsonAsync(new
         {
