@@ -10,11 +10,9 @@ public class RoutingMiddleware
             return;
         }
 
-        // Return JSON error response for unsupported URLs
+        // Return JSON error response for unsupported URLs (consistent format)
         context.Response.StatusCode = StatusCodes.Status403Forbidden;
-        context.Response.ContentType = "application/json";
-        var errorResponse = new { Error = "URL not supported" };
-        await context.Response.WriteAsJsonAsync(errorResponse);
+       await context.Response.WriteAsync("URL not supported.");
     }
 }
 
