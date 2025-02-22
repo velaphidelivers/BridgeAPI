@@ -18,8 +18,13 @@ public class RoutingMiddleware
         }
 
         // Return 403 for unsupported URLs
+        /*       context.Response.StatusCode = StatusCodes.Status403Forbidden;
+              await context.Response.WriteAsync("URL not supported"); */
         context.Response.StatusCode = StatusCodes.Status403Forbidden;
-        await context.Response.WriteAsync("URL not supported");
+        await context.Response.WriteAsJsonAsync(new
+        {
+            Error = "Url not supported"
+        });
     }
 }
 
