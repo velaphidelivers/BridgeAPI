@@ -2,7 +2,6 @@ public class RoutingMiddleware
 {
     private readonly RequestDelegate _next;
 
-
     public RoutingMiddleware(RequestDelegate next)
     {
         _next = next ?? throw new ArgumentNullException(nameof(next));
@@ -10,9 +9,17 @@ public class RoutingMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        var healthStatus = new HealthStatus("Healthy", DateTime.Now);
-        await context.Response.WriteAsJsonAsync(healthStatus);
-        return;
+        if (context.Request.Path.Equals("/health", StringComparison.OrdinalIgnoreCase))
+        {
+            var healthStatus = new HealthStatus("Healthy", DateTime.UtcNow);
+            context.Response.StatusCode = StatusCodes.Status200OK;
+            await context.Response.WriteAsJsonAsync(healthStatus);
+            return;
+        }
+
+        // Return 403 for unsupported URLs
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsync("URL not supported");
     }
 }
 
