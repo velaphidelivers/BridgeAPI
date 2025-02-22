@@ -17,6 +17,7 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseMiddleware<RoutingMiddleware>();
 
 app.MapGet("/health", () =>
 {
@@ -26,8 +27,7 @@ app.MapGet("/health", () =>
 .WithName("GetHealthStatus")
 .WithOpenApi();
 
-// Configure the HTTP request pipeline
-app.UseMiddleware<RoutingMiddleware>();
+
 
 app.Run();
 
