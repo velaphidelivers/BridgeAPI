@@ -16,9 +16,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.UseMiddleware<CorrelationIdMiddleware>();
-// // Configure the HTTP request pipeline
-// app.UseMiddleware<RoutingMiddleware>();
+//app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseMiddleware<RoutingMiddleware>();
 app.MapGet("/health", () =>
 {
     var healthStatus = new HealthStatus("Healthy", DateTime.Now);
