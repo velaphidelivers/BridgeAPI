@@ -15,7 +15,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddHttpClient<ITokenService, TokenService>();
 
 // Assuming AllowedUrls requires some configuration
-builder.Services.AddSingleton<IAllowUrls>(provider =>
+builder.Services.AddSingleton<IAllowedUrls>(provider =>
 {
     // You can configure AllowedUrls based on your application settings or parameters.
     // Here we create an instance directly.

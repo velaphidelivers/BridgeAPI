@@ -1,10 +1,14 @@
+using Helpers.Interfaces;
+
 public class RoutingMiddleware
 {
     private readonly RequestDelegate _next;
+    private readonly IAllowedUrls _allowedUrls;
 
-    public RoutingMiddleware(RequestDelegate next)
+    public RoutingMiddleware(RequestDelegate next, IAllowedUrls allowedUrls)
     {
         _next = next ?? throw new ArgumentNullException(nameof(next));
+        _allowedUrls = allowedUrls;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -14,6 +18,14 @@ public class RoutingMiddleware
             var healthStatus = new HealthStatus("Healthy", DateTime.UtcNow);
             context.Response.StatusCode = StatusCodes.Status200OK;
             await context.Response.WriteAsJsonAsync(healthStatus);
+            return;
+        }
+
+        //check if path is allowed otherwise skip. 
+        if (_allowedUrls.IsAllowed(context.Request.Path.Value.Substring(1)))
+        {
+            context.Response.StatusCode = StatusCodes.Status200OK;
+            await context.Response.WriteAsJsonAsync(new { });
             return;
         }
 

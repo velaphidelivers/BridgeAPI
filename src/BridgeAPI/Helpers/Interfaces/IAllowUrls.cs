@@ -3,7 +3,7 @@
     /// <summary>
     /// Defines a contract for checking if a given URL or resource is allowed based on specific rules.
     /// </summary>
-    public interface IAllowUrls
+    public interface IAllowedUrls
     {
         /// <summary>
         /// Determines whether the specified resource is allowed.

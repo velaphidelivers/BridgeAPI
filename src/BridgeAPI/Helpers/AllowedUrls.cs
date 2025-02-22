@@ -3,7 +3,7 @@ using Helpers.Interfaces;
 
 namespace Helpers
 {
-    public class AllowedUrls : IAllowUrls
+    public class AllowedUrls : IAllowedUrls
     {
         private static readonly string[] Patterns =
         {
