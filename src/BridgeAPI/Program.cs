@@ -42,7 +42,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseMiddleware<CorrelationIdMiddleware>();
+//app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseMiddleware<RoutingMiddleware>();
 //app.ConfigureExceptionHandler();
 app.MapGet("/health", () =>
