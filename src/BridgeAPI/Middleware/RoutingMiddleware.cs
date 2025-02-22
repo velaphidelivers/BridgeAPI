@@ -132,42 +132,17 @@ public class RoutingMiddleware
 
             }
             httpRequestMessage.RequestUri = new Uri($"{url}{UrlEncode}?{queryString}");
-            HttpResponseMessage? response = await client.SendAsync(httpRequestMessage);
-
-            if (response != null)
-            {
-                string responseBody = string.Empty;
-                context.Response.ContentType = response.Content?.Headers?.ContentType?.MediaType;
-
-                if (response.Content != null)
-                {
-                    context.Response.ContentLength = (await response.Content.ReadAsByteArrayAsync()).Length;
-                    responseBody = await response.Content.ReadAsStringAsync();
-                }
-                else
-                {
-                    context.Response.ContentLength = 0;
-
-                }
-                context.Response.StatusCode = (int)response.StatusCode;
-
-                context.Response.Headers.AccessControlAllowOrigin = "*";
-                context.Response.Headers.AccessControlAllowHeaders = "*";
-                context.Response.Headers.AccessControlAllowMethods = "*";
-
-                context.Response.Headers.Add("Correlation-Id", correlationId);
-
-                context.Response.StatusCode = StatusCodes.Status200OK;
-                await context.Response.WriteAsJsonAsync(new { Token = applicationToken });
-                return;
-            }
-
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            await context.Response.WriteAsJsonAsync(new
-            {
-                Error = "Url not supported"
-            });
+            context.Response.StatusCode = StatusCodes.Status200OK;
+            await context.Response.WriteAsJsonAsync(new { Token = applicationToken });
+            return;
         }
+
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(new
+        {
+            Error = "Url not supported"
+        });
     }
 }
+
 record HealthStatus(string Status, DateTime CheckedAt);
