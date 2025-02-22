@@ -1,8 +1,8 @@
 public class RoutingMiddleware
 {
     private readonly RequestDelegate _next;
-    private readonly ILogger<CorrelationIdMiddleware> _logger;
-    public RoutingMiddleware(RequestDelegate next, ILogger<CorrelationIdMiddleware> logger)
+    private readonly ILogger<RoutingMiddleware> _logger;
+    public RoutingMiddleware(RequestDelegate next, ILogger<RoutingMiddleware> logger)
     {
         _next = next;
         _logger = logger;
