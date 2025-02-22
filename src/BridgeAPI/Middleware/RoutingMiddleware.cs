@@ -9,7 +9,7 @@ public class RoutingMiddleware
     }
     public async Task InvokeAsync(HttpContext context)
     {
-        await context.Response.WriteAsync(string.Empty);
+      //  await context.Response.WriteAsync(string.Empty);
         // Continue with the next middleware or endpoint
         await _next(context);
     }
