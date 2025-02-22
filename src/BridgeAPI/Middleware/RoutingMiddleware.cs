@@ -17,7 +17,10 @@ public class RoutingMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        // Pass control to the next middleware in the pipeline
-        await _next(context);
+        var healthStatus = new HealthStatus("Healthy", DateTime.Now);
+        await context.Response.WriteAsJsonAsync(healthStatus);
+        return;
     }
 }
+
+record HealthStatus(string Status, DateTime CheckedAt);

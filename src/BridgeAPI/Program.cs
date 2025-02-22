@@ -45,16 +45,6 @@ app.UseHttpsRedirection();
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseMiddleware<RoutingMiddleware>();
 //app.ConfigureExceptionHandler();
-app.MapGet("/health", () =>
-{
-    var healthStatus = new HealthStatus("Healthy", DateTime.Now);
-    return healthStatus;
-})
-.WithName("GetHealthStatus")
-.WithOpenApi();
-
-
 
 app.Run();
 
-record HealthStatus(string Status, DateTime CheckedAt);
