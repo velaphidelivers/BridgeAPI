@@ -16,6 +16,7 @@ public class RoutingMiddleware
         {
             Error = "URL not supported"
         });
+        return;
     }
 }
 
