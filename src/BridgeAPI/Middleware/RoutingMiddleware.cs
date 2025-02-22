@@ -155,7 +155,6 @@ public class RoutingMiddleware
                 context.Response.Headers.AccessControlAllowHeaders = "*";
                 context.Response.Headers.AccessControlAllowMethods = "*";
                 context.Response.Headers.Add("Correlation-Id", correlationId);
-                context.Response.StatusCode = StatusCodes.Status200OK;
                 await context.Response.WriteAsync(responseBody);
                 return;
             }
