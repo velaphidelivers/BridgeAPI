@@ -1,3 +1,6 @@
+using System.Net.Http.Headers;
+using System.Text;
+using System.Web;
 using Errors;
 using Helpers.Interfaces;
 using Services.Interfaces;
@@ -29,6 +32,7 @@ public class RoutingMiddleware
         string route = string.Empty;
         var apiKey = _configuration.GetValue<string>("ApiKey");
         var correlationId = context?.Request?.Headers["Correlation-Id"].ToString();
+        var client = new HttpClient();
 
         if (path != null && path.Equals("health", StringComparison.OrdinalIgnoreCase))
         {
@@ -57,20 +61,111 @@ public class RoutingMiddleware
 
             if (applicationToken?.Token == null)
             {
-                throw new HttpException((int)ErrorCodes.TokenMalformedError, "The tolen application is null or malformed.");
+                throw new HttpException((int)ErrorCodes.TokenMalformedError, "The application token is null or malformed.");
+            }
+            var url = _configuration.GetValue<string>($"{appName}");
+
+            client.BaseAddress = new Uri(url ?? throw new HttpException((int)ErrorCodes.MissingConfigData, "BaseAddress configuration is missing."));
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", applicationToken.Token);
+            client.DefaultRequestHeaders.Add("x-api-key", apiKey);
+            client.DefaultRequestHeaders.Add("Correlation-Id", correlationId ?? Guid.NewGuid().ToString());
+
+            var httpRequestMessage = new HttpRequestMessage
+            {
+                Content = null,
+                Method = new HttpMethod(context.Request.Method)
+            };
+            if (new[] { "POST", "PATCH", "PUT", "DELETE", "HEAD" }.Contains(context.Request.Method))
+            {
+                if (context.Request.HasFormContentType)
+                {
+                    // Handle multipart/form-data content
+                    var formDataContent = new MultipartFormDataContent();
+
+                    foreach (var formFile in context.Request.Form.Files)
+                    {
+                        var fileContent = new StreamContent(formFile.OpenReadStream())
+                        {
+                            Headers =
+                            {
+                                ContentDisposition = new ContentDispositionHeaderValue("form-data")
+                                {
+                                    Name = formFile.Name,
+                                    FileName = formFile.FileName
+                                }
+                            }
+                        };
+                        fileContent.Headers.ContentType = new MediaTypeHeaderValue(formFile.ContentType);
+                        formDataContent.Add(fileContent);
+                    }
+
+                    foreach (var formField in context.Request.Form)
+                    {
+                        if (!context.Request.Form.Files.Any(f => f.Name == formField.Key))
+                        {
+                            var value = formField.Value.ToString();
+                            formDataContent.Add(new StringContent(value), formField.Key);
+                        }
+                    }
+
+                    httpRequestMessage.Content = formDataContent;
+                }
+                else
+                {
+                    var jsonBody = string.Empty;
+                    using (var reader = new StreamReader(context.Request.Body))
+                    {
+                        jsonBody = await reader.ReadToEndAsync();
+                    }
+                    httpRequestMessage.Content = new StringContent(jsonBody, Encoding.UTF8, context.Request.ContentType ?? "application/json");
+                }
+            }
+            var param = context.Request.Query;
+            var queryString = string.Join('&', param.Select(item => $"{item.Key}={System.Web.HttpUtility.UrlEncode(item.Value)}"));
+            var UrlEncode = string.Empty;
+            foreach (var piece in route.Split('/'))
+            {
+                if (UrlEncode.Length == 0)
+                    UrlEncode += $"{HttpUtility.UrlEncode(piece)}";
+                else
+                    UrlEncode += $"/{HttpUtility.UrlEncode(piece)}";
+
+            }
+            httpRequestMessage.RequestUri = new Uri($"{url}{UrlEncode}?{queryString}");
+            HttpResponseMessage? response = await client.SendAsync(httpRequestMessage);
+
+            if (response != null)
+            {
+                string responseBody = string.Empty;
+                context.Response.ContentType = response.Content?.Headers?.ContentType?.MediaType;
+
+                if (response.Content != null)
+                {
+                    context.Response.ContentLength = (await response.Content.ReadAsByteArrayAsync()).Length;
+                    responseBody = await response.Content.ReadAsStringAsync();
+                }
+                else
+                {
+                    context.Response.ContentLength = 0;
+
+                }
+                context.Response.StatusCode = (int)response.StatusCode;
+
+                context.Response.Headers.AccessControlAllowOrigin = "*";
+                context.Response.Headers.AccessControlAllowHeaders = "*";
+                context.Response.Headers.AccessControlAllowMethods = "*";
+                context.Response.Headers.Add("Correlation-Id", correlationId);
+                context.Response.StatusCode = StatusCodes.Status200OK;
+                await context.Response.WriteAsync(responseBody);
+                return;
             }
 
-            context.Response.StatusCode = StatusCodes.Status200OK;
-            await context.Response.WriteAsJsonAsync(new { Token = applicationToken });
-            return;
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new
+            {
+                Error = "Url not supported"
+            });
         }
-
-        context.Response.StatusCode = StatusCodes.Status403Forbidden;
-        await context.Response.WriteAsJsonAsync(new
-        {
-            Error = "Url not supported"
-        });
     }
 }
-
 record HealthStatus(string Status, DateTime CheckedAt);
