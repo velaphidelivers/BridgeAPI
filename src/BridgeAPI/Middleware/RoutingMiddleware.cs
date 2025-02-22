@@ -154,8 +154,11 @@ public class RoutingMiddleware
                 context.Response.Headers.AccessControlAllowOrigin = "*";
                 context.Response.Headers.AccessControlAllowHeaders = "*";
                 context.Response.Headers.AccessControlAllowMethods = "*";
+
                 context.Response.Headers.Add("Correlation-Id", correlationId);
-                await context.Response.WriteAsync(responseBody);
+
+                context.Response.StatusCode = StatusCodes.Status200OK;
+                await context.Response.WriteAsJsonAsync(new { Token = applicationToken });
                 return;
             }
 
