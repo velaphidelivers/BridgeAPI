@@ -6,6 +6,7 @@ public class RoutingMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<CorrelationIdMiddleware> _logger;
+    private const string CorrelationIdHeader = "Correlation-Id";
 
     public RoutingMiddleware(RequestDelegate next, ILogger<CorrelationIdMiddleware> logger)
     {
@@ -15,7 +16,10 @@ public class RoutingMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        // Continue with the next middleware or endpoint
-        await _next(context);
+        await context.Response.WriteAsJsonAsync(new
+        {
+            Error = $"Hello from the other side!"
+        });
+        return;
     }
 }
