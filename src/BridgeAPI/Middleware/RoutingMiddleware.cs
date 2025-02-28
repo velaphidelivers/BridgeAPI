@@ -133,7 +133,13 @@ public class RoutingMiddleware
             }
             httpRequestMessage.RequestUri = new Uri($"{url}{UrlEncode}?{queryString}");
             context.Response.StatusCode = StatusCodes.Status200OK;
-            await context.Response.WriteAsJsonAsync(new { Token = applicationToken });
+            await context.Response.WriteAsJsonAsync(new
+            {
+                Debug = new
+                {
+                    httpRequestMessage.RequestUri
+                }
+            });
             return;
         }
 
