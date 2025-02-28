@@ -132,13 +132,22 @@ public class RoutingMiddleware
 
             }
             httpRequestMessage.RequestUri = new Uri($"{url}{UrlEncode}?{queryString}");
+
+            //populate headers
+            foreach (var header in context.Request.Headers)
+            {
+                httpRequestMessage.Headers.Add(header.Key, header.Value.FirstOrDefault());
+            }
+            if (!httpRequestMessage.Headers.Any(header => header.Key == "Correlation-Id"))
+            {
+                httpRequestMessage.Headers.Add("Correlation-Id", correlationId);
+            }
             context.Response.StatusCode = StatusCodes.Status200OK;
             await context.Response.WriteAsJsonAsync(new
             {
                 Debug = new
                 {
                     httpRequestMessage.RequestUri,
-                    httpRequestMessage.Content,
                     httpRequestMessage.Headers
                 }
             });
