@@ -138,8 +138,7 @@ public class RoutingMiddleware
             {
                 httpRequestMessage.Headers.Add(header.Key, header.Value.FirstOrDefault());
             }
-            httpRequestMessage.Headers.Add("Content-Type", context.Request.Headers.ContentType.FirstOrDefault());
-            httpRequestMessage.Headers.Add("Content-Length", $"{context?.Request?.Headers?.ContentLength.Value}");
+           
 
             context.Response.StatusCode = StatusCodes.Status200OK;
             await context.Response.WriteAsJsonAsync(new
