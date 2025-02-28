@@ -137,7 +137,9 @@ public class RoutingMiddleware
             {
                 Debug = new
                 {
-                    httpRequestMessage.RequestUri
+                    httpRequestMessage.RequestUri,
+                    httpRequestMessage.Content,
+                    httpRequestMessage.Headers
                 }
             });
             return;
