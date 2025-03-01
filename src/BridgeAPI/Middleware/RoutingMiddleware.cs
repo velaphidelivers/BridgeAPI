@@ -7,157 +7,158 @@ using Services.Interfaces;
 
 public class RoutingMiddleware
 {
-    private readonly RequestDelegate _next;
     private readonly IAllowedUrls _allowedUrls;
     private readonly IConfiguration _configuration;
     private readonly ITokenService _tokenService;
+    private readonly HttpClient _httpClient;
 
-    public RoutingMiddleware(RequestDelegate next, IAllowedUrls allowedUrls, IConfiguration configuration, ITokenService tokenService)
+    public RoutingMiddleware(IAllowedUrls allowedUrls, IConfiguration configuration, ITokenService tokenService, HttpClient httpClient)
     {
-        _next = next ?? throw new ArgumentNullException(nameof(next));
-        _allowedUrls = allowedUrls;
-        _configuration = configuration;
-        _tokenService = tokenService;
+        _allowedUrls = allowedUrls ?? throw new ArgumentNullException(nameof(allowedUrls));
+        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+        _tokenService = tokenService ?? throw new ArgumentNullException(nameof(tokenService));
+        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
     }
 
     public async Task InvokeAsync(HttpContext context)
     {
         if (context == null)
-        {
             throw new ArgumentNullException(nameof(context));
-        }
 
-        var path = context.Request?.Path.Value?.Substring(1);
-        string appName = string.Empty;
-        string route = string.Empty;
-        var apiKey = _configuration.GetValue<string>("ApiKey");
-        var correlationId = context?.Request?.Headers["Correlation-Id"].ToString();
-        var client = new HttpClient();
-
-        if (path != null && path.Equals("health", StringComparison.OrdinalIgnoreCase))
+        var path = context.Request?.Path.Value?.Trim('/');
+        if (string.IsNullOrEmpty(path))
         {
-            var healthStatus = new HealthStatus("Healthy", DateTime.UtcNow);
-            context.Response.StatusCode = StatusCodes.Status200OK;
-            await context.Response.WriteAsJsonAsync(healthStatus);
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsJsonAsync(new { Error = "Invalid request path." });
             return;
         }
-        if (path != null && (path.StartsWith("Secure", StringComparison.OrdinalIgnoreCase) || path.StartsWith("Anonymous", StringComparison.OrdinalIgnoreCase)))
+
+        if (path.Equals("health", StringComparison.OrdinalIgnoreCase))
         {
-            if (path.Equals("Anonymous/Authenticate", StringComparison.OrdinalIgnoreCase))
+            await WriteHealthResponse(context);
+            return;
+        }
+
+        string appName;
+        string route;
+        string userToken = context.Request.Headers["X-UserToken"];
+        bool isSecureRequest = path.StartsWith("Secure", StringComparison.OrdinalIgnoreCase);
+        bool isAnonymousRequest = path.StartsWith("Anonymous", StringComparison.OrdinalIgnoreCase);
+
+        if (isAnonymousRequest && path.Equals("Anonymous/Authenticate", StringComparison.OrdinalIgnoreCase))
+        {
+            appName = "UserAuthApiBaseUrl";
+            route = "Users/Login";
+        }
+        else if (isSecureRequest)
+        {
+            var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length < 3)
             {
-                appName = "UserAuthApiBaseUrl";
-                route = "Users/Login";
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await context.Response.WriteAsJsonAsync(new { Error = "Invalid secure API request format." });
+                return;
             }
-            else if (!_allowedUrls.IsAllowed(path ?? string.Empty))
+
+            appName = segments[1];
+            route = string.Join('/', segments.Skip(2));
+
+            if (!_allowedUrls.IsAllowed(route))
             {
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                await context.Response.WriteAsJsonAsync(new
-                {
-                    Error = "Url not supported"
-                });
+                await context.Response.WriteAsJsonAsync(new { Error = "URL not supported." });
+                return;
             }
 
-            var applicationToken = await _tokenService.GetToken(correlationId);
-
-            if (applicationToken?.Token == null)
+            if (string.IsNullOrWhiteSpace(userToken))
             {
-                throw new HttpException((int)ErrorCodes.TokenMalformedError, "The application token is null or malformed.");
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsJsonAsync(new { Error = "Missing authentication token." });
+                return;
             }
-            var url = _configuration.GetValue<string>($"{appName}");
-
-            client.BaseAddress = new Uri(url ?? throw new HttpException((int)ErrorCodes.MissingConfigData, "BaseAddress configuration is missing."));
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", applicationToken.Token);
-            client.DefaultRequestHeaders.Add("x-api-key", apiKey);
-            client.DefaultRequestHeaders.Add("Correlation-Id", correlationId ?? Guid.NewGuid().ToString());
-
-            var httpRequestMessage = new HttpRequestMessage
-            {
-                Content = null,
-                Method = new HttpMethod(context.Request.Method)
-            };
-            if (new[] { "POST", "PATCH", "PUT", "DELETE", "HEAD" }.Contains(context.Request.Method))
-            {
-                if (context.Request.HasFormContentType)
-                {
-                    // Handle multipart/form-data content
-                    var formDataContent = new MultipartFormDataContent();
-
-                    foreach (var formFile in context.Request.Form.Files)
-                    {
-                        var fileContent = new StreamContent(formFile.OpenReadStream())
-                        {
-                            Headers =
-                            {
-                                ContentDisposition = new ContentDispositionHeaderValue("form-data")
-                                {
-                                    Name = formFile.Name,
-                                    FileName = formFile.FileName
-                                }
-                            }
-                        };
-                        fileContent.Headers.ContentType = new MediaTypeHeaderValue(formFile.ContentType);
-                        formDataContent.Add(fileContent);
-                    }
-
-                    foreach (var formField in context.Request.Form)
-                    {
-                        if (!context.Request.Form.Files.Any(f => f.Name == formField.Key))
-                        {
-                            var value = formField.Value.ToString();
-                            formDataContent.Add(new StringContent(value), formField.Key);
-                        }
-                    }
-
-                    httpRequestMessage.Content = formDataContent;
-                }
-                else
-                {
-                    var jsonBody = string.Empty;
-                    using (var reader = new StreamReader(context.Request.Body))
-                    {
-                        jsonBody = await reader.ReadToEndAsync();
-                    }
-                    httpRequestMessage.Content = new StringContent(jsonBody, Encoding.UTF8, context.Request.ContentType ?? "application/json");
-                }
-            }
-            var param = context.Request.Query;
-            var queryString = string.Join('&', param.Select(item => $"{item.Key}={System.Web.HttpUtility.UrlEncode(item.Value)}"));
-            var UrlEncode = string.Empty;
-            foreach (var piece in route.Split('/'))
-            {
-                if (UrlEncode.Length == 0)
-                    UrlEncode += $"{HttpUtility.UrlEncode(piece)}";
-                else
-                    UrlEncode += $"/{HttpUtility.UrlEncode(piece)}";
-
-            }
-            httpRequestMessage.RequestUri = new Uri($"{url}{UrlEncode}?{queryString}");
-
-            //populate headers
-            foreach (var header in context.Request.Headers)
-            {
-                httpRequestMessage.Headers.Add(header.Key, header.Value.FirstOrDefault());
-            }
-           
-
-            context.Response.StatusCode = StatusCodes.Status200OK;
-            await context.Response.WriteAsJsonAsync(new
-            {
-                Debug = new
-                {
-                    httpRequestMessage.RequestUri,
-                    httpRequestMessage.Headers
-                }
-            });
+        }
+        else
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new { Error = "URL not supported." });
             return;
         }
 
-        context.Response.StatusCode = StatusCodes.Status403Forbidden;
-        await context.Response.WriteAsJsonAsync(new
+        var baseUrl = _configuration.GetValue<string>(appName);
+        if (string.IsNullOrEmpty(baseUrl))
         {
-            Error = "Url not supported"
-        });
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            await context.Response.WriteAsJsonAsync(new { Error = "API base URL missing from configuration." });
+            return;
+        }
+
+        var applicationToken = await _tokenService.GetToken(context.TraceIdentifier);
+        if (applicationToken?.Token == null)
+        {
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            await context.Response.WriteAsJsonAsync(new { Error = "Failed to obtain a valid application token." });
+            return;
+        }
+
+        var requestMessage = CreateHttpRequestMessage(context, baseUrl, route);
+        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", applicationToken.Token);
+
+        if (isSecureRequest)
+        {
+            requestMessage.Headers.Add("X-UserToken", userToken);
+        }
+
+        using var response = await _httpClient.SendAsync(requestMessage, HttpCompletionOption.ResponseHeadersRead);
+        await CopyResponseToHttpContext(response, context);
+    }
+
+    private static async Task WriteHealthResponse(HttpContext context)
+    {
+        var healthStatus = new { Status = "Healthy", CheckedAt = DateTime.UtcNow };
+        context.Response.StatusCode = StatusCodes.Status200OK;
+        await context.Response.WriteAsJsonAsync(healthStatus);
+    }
+
+    private static HttpRequestMessage CreateHttpRequestMessage(HttpContext context, string baseUrl, string route)
+    {
+        var request = new HttpRequestMessage(new HttpMethod(context.Request.Method), $"{baseUrl}/{HttpUtility.UrlEncode(route)}{context.Request.QueryString}");
+
+        foreach (var header in context.Request.Headers)
+        {
+            if (!request.Headers.Contains(header.Key))
+            {
+                request.Headers.TryAddWithoutValidation(header.Key, header.Value.AsEnumerable());
+            }
+        }
+
+        if (context.Request.ContentLength > 0)
+        {
+            request.Content = new StreamContent(context.Request.Body);
+            foreach (var header in context.Request.Headers)
+            {
+                if (header.Key.StartsWith("Content-", StringComparison.OrdinalIgnoreCase))
+                {
+                    request.Content.Headers.TryAddWithoutValidation(header.Key, header.Value.AsEnumerable());
+                }
+            }
+        }
+
+        return request;
+    }
+
+    private static async Task CopyResponseToHttpContext(HttpResponseMessage response, HttpContext context)
+    {
+        context.Response.StatusCode = (int)response.StatusCode;
+        foreach (var header in response.Headers)
+        {
+            context.Response.Headers[header.Key] = header.Value.ToArray();
+        }
+        foreach (var header in response.Content.Headers)
+        {
+            context.Response.Headers[header.Key] = header.Value.ToArray();
+        }
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        await responseStream.CopyToAsync(context.Response.Body);
     }
 }
-
-record HealthStatus(string Status, DateTime CheckedAt);
