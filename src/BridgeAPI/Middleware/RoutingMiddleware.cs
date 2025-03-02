@@ -1,8 +1,12 @@
+using System.Diagnostics;
 using System.Net.Http.Headers;
+using System.Net.Mime;
 using System.Text;
 using System.Web;
 using Errors;
 using Helpers.Interfaces;
+using Models;
+using Newtonsoft.Json.Linq;
 using Services.Interfaces;
 
 public class RoutingMiddleware
@@ -54,7 +58,7 @@ public class RoutingMiddleware
 
         var (client, httpRequestMessage) = BuildHttpRequest(context, applicationToken.Token, appName, route);
 
-        Console.WriteLine($"[DEBUG] Sending request to: {httpRequestMessage.RequestUri}");
+        Console.WriteLine($"[DEBUG] Sending request to: {httpRequestMessage?.RequestUri?.AbsolutePath}");
         Console.WriteLine($"[DEBUG] Method: {httpRequestMessage.Method}");
         Console.WriteLine($"[DEBUG] Headers: {string.Join(", ", httpRequestMessage.Headers.Select(h => $"{h.Key}: {string.Join(", ", h.Value)}"))}");
         if (httpRequestMessage.Content != null)
@@ -63,22 +67,49 @@ public class RoutingMiddleware
             Console.WriteLine($"[DEBUG] Body: {content}");
         }
 
-        var response = await client.SendAsync(httpRequestMessage);
+        client.DefaultRequestHeaders.Host = null;
+        HttpResponseMessage? response = await client.SendAsync(httpRequestMessage);
 
-        Console.WriteLine($"[DEBUG] Response Status: {response.StatusCode}");
-        Console.WriteLine($"[DEBUG] Response Headers: {string.Join(", ", response.Headers.Select(h => $"{h.Key}: {string.Join(", ", h.Value)}"))}");
-
-        var responseBody = await response.Content.ReadAsStringAsync();
-        Console.WriteLine($"[DEBUG] Response Body: {responseBody}");
-
-        context.Response.StatusCode = (int)response.StatusCode;
-
-        foreach (var header in response.Headers)
+        if (response != null)
         {
-            context.Response.Headers[header.Key] = header.Value.ToArray();
-        }
+            string responseBody = string.Empty;
+            context.Response.ContentType = response.Content?.Headers?.ContentType?.MediaType;
 
-        await context.Response.WriteAsync(responseBody);
+            if (response.Content != null)
+            {
+                context.Response.ContentLength = (await response.Content.ReadAsByteArrayAsync()).Length;
+                responseBody = await response.Content.ReadAsStringAsync();
+            }
+            else
+            {
+                context.Response.ContentLength = 0;
+
+            }
+            context.Response.StatusCode = (int)response.StatusCode;
+
+            context.Response.Headers.AccessControlAllowOrigin = "*";
+            context.Response.Headers.AccessControlAllowHeaders = "*";
+            context.Response.Headers.AccessControlAllowMethods = "*";
+
+
+            Console.WriteLine("Response:");
+            Console.WriteLine("StatusCode: " + (int)response.StatusCode);
+            Console.WriteLine("Headers:");
+            foreach (var header in response.Headers)
+            {
+                Console.WriteLine($"{header.Key}: {string.Join(", ", header.Value)}");
+            }
+            Console.WriteLine("Body: " + responseBody);
+
+            await context.Response.WriteAsync(responseBody);
+        }
+        else
+        {
+            // Handle case where response is null
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            await context.Response.WriteAsync("Failed to receive a response from the upstream service.");
+        }
+        return;
     }
 
     private static async Task RespondWithHealthStatus(HttpContext context)
@@ -107,9 +138,37 @@ public class RoutingMiddleware
         client.DefaultRequestHeaders.Add("x-api-key", _configuration.GetValue<string>("ApiKey"));
         client.DefaultRequestHeaders.Add("Correlation-Id", context.Request.Headers["Correlation-Id"].ToString() ?? Guid.NewGuid().ToString());
 
+        HttpContent content = null;
+
+        // Check if the method requires content
         if (new[] { "POST", "PATCH", "PUT", "DELETE", "HEAD" }.Contains(context.Request.Method))
         {
-            httpRequestMessage.Content = context.Request.HasFormContentType ? BuildMultipartContent(context) : BuildJsonContent(context);
+            var contentType = context.Request.ContentType;
+
+            // Handle JSON content
+            if (!string.IsNullOrEmpty(contentType) && contentType.Contains("application/json", StringComparison.OrdinalIgnoreCase))
+            {
+                content = BuildJsonContent(context);
+            }
+            // Handle Form content (multipart/form-data)
+            else if (!string.IsNullOrEmpty(contentType) && contentType.Contains("multipart/form-data", StringComparison.OrdinalIgnoreCase))
+            {
+                content = BuildMultipartContent(context);
+            }
+            // Handle form-urlencoded content (application/x-www-form-urlencoded)
+            else if (!string.IsNullOrEmpty(contentType) && contentType.Contains("application/x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase))
+            {
+                content = BuildFormUrlEncodedContent(context);
+            }
+        }
+
+        if (content != null)
+        {
+            httpRequestMessage.Content = content;
+
+            // Set Content-Type and Content-Length only when content is populated
+            httpRequestMessage.Headers.TryAddWithoutValidation("Content-Type", content.Headers.ContentType.ToString());
+            httpRequestMessage.Headers.TryAddWithoutValidation("Content-Length", content.Headers.ContentLength?.ToString());
         }
 
         var queryString = string.Join('&', context.Request.Query.Select(item => $"{item.Key}={HttpUtility.UrlEncode(item.Value)}"));
@@ -117,10 +176,18 @@ public class RoutingMiddleware
 
         foreach (var header in context.Request.Headers)
         {
-            httpRequestMessage.Headers.Add(header.Key, header.Value.FirstOrDefault());
+            if (!header.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase) && !header.Key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
+                client.DefaultRequestHeaders.Add(header.Key, header.Value.FirstOrDefault());
         }
 
         return (client, httpRequestMessage);
+    }
+
+    private static StringContent BuildJsonContent(HttpContext context)
+    {
+        using var reader = new StreamReader(context.Request.Body);
+        var jsonBody = reader.ReadToEndAsync().Result;
+        return new StringContent(jsonBody, Encoding.UTF8, "application/json");
     }
 
     private static MultipartFormDataContent BuildMultipartContent(HttpContext context)
@@ -140,11 +207,10 @@ public class RoutingMiddleware
         return formDataContent;
     }
 
-    private static StringContent BuildJsonContent(HttpContext context)
+    private static FormUrlEncodedContent BuildFormUrlEncodedContent(HttpContext context)
     {
-        using var reader = new StreamReader(context.Request.Body);
-        var jsonBody = reader.ReadToEndAsync().Result;
-        return new StringContent(jsonBody, Encoding.UTF8, context.Request.ContentType ?? "application/json");
+        var formFields = context.Request.Form.Select(f => new KeyValuePair<string, string>(f.Key, f.Value.ToString()));
+        return new FormUrlEncodedContent(formFields);
     }
 
     private static string EncodeRoute(string route)
