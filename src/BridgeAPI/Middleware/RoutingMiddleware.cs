@@ -70,7 +70,7 @@ public class RoutingMiddleware
         client.DefaultRequestHeaders.Host = null;
         HttpResponseMessage? response = await client.SendAsync(httpRequestMessage);
 
-        if (response != null)
+        if (response != null&& response.IsSuccessStatusCode) 
         {
             string responseBody = string.Empty;
             context.Response.ContentType = response.Content?.Headers?.ContentType?.MediaType;
