@@ -54,8 +54,24 @@ public class RoutingMiddleware
 
         var httpRequestMessage = BuildHttpRequest(context, applicationToken.Token, appName, route);
 
+        Console.WriteLine($"[DEBUG] Sending request to: {httpRequestMessage.RequestUri}");
+        Console.WriteLine($"[DEBUG] Method: {httpRequestMessage.Method}");
+        Console.WriteLine($"[DEBUG] Headers: {string.Join(", ", httpRequestMessage.Headers.Select(h => $"{h.Key}: {string.Join(", ", h.Value)}"))}");
+        if (httpRequestMessage.Content != null)
+        {
+            var content = await httpRequestMessage.Content.ReadAsStringAsync();
+            Console.WriteLine($"[DEBUG] Body: {content}");
+        }
+
         using var client = new HttpClient();
         var response = await client.SendAsync(httpRequestMessage);
+
+        Console.WriteLine($"[DEBUG] Response Status: {response.StatusCode}");
+        Console.WriteLine($"[DEBUG] Response Headers: {string.Join(", ", response.Headers.Select(h => $"{h.Key}: {string.Join(", ", h.Value)}"))}");
+
+        var responseBody = await response.Content.ReadAsStringAsync();
+        Console.WriteLine($"[DEBUG] Response Body: {responseBody}");
+
         context.Response.StatusCode = (int)response.StatusCode;
 
         foreach (var header in response.Headers)
@@ -63,11 +79,8 @@ public class RoutingMiddleware
             context.Response.Headers[header.Key] = header.Value.ToArray();
         }
 
-        var responseBody = await response.Content.ReadAsStringAsync();
         await context.Response.WriteAsync(responseBody);
-        
-        /*  context.Response.StatusCode = StatusCodes.Status200OK;
-         await context.Response.WriteAsJsonAsync(new { Debug = new { httpRequestMessage.RequestUri, httpRequestMessage.Headers } }); */
+
         return;
     }
 
