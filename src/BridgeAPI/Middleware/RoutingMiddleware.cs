@@ -34,7 +34,11 @@ public class RoutingMiddleware
         var correlationId = context?.Request?.Headers["Correlation-Id"].ToString();
         var client = new HttpClient();
 
-       await WriteHealthResponse(context);
+        if (context.Request.Path != null && context.Request.Path.Equals("health", StringComparison.OrdinalIgnoreCase))
+        {
+            await WriteHealthResponse(context);
+            return;
+        }
 
         if (path != null && (path.StartsWith("Secure", StringComparison.OrdinalIgnoreCase) || path.StartsWith("Anonymous", StringComparison.OrdinalIgnoreCase)))
         {
@@ -155,13 +159,9 @@ public class RoutingMiddleware
     }
     private static async Task WriteHealthResponse(HttpContext context)
     {
-        if (context.Request.Path != null && context.Request.Path.Equals("health", StringComparison.OrdinalIgnoreCase))
-        {
-            var healthStatus = new HealthStatus("Healthy", DateTime.UtcNow);
-            context.Response.StatusCode = StatusCodes.Status200OK;
-            await context.Response.WriteAsJsonAsync(healthStatus);
-            return;
-        }
+        var healthStatus = new HealthStatus("Healthy", DateTime.UtcNow);
+        context.Response.StatusCode = StatusCodes.Status200OK;
+        await context.Response.WriteAsJsonAsync(healthStatus);
     }
 }
 
