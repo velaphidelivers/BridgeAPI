@@ -34,13 +34,8 @@ public class RoutingMiddleware
         var correlationId = context?.Request?.Headers["Correlation-Id"].ToString();
         var client = new HttpClient();
 
-        if (path != null && path.Equals("health", StringComparison.OrdinalIgnoreCase))
-        {
-            var healthStatus = new HealthStatus("Healthy", DateTime.UtcNow);
-            context.Response.StatusCode = StatusCodes.Status200OK;
-            await context.Response.WriteAsJsonAsync(healthStatus);
-            return;
-        }
+       await WriteHealthResponse(context);
+
         if (path != null && (path.StartsWith("Secure", StringComparison.OrdinalIgnoreCase) || path.StartsWith("Anonymous", StringComparison.OrdinalIgnoreCase)))
         {
             if (path.Equals("Anonymous/Authenticate", StringComparison.OrdinalIgnoreCase))
@@ -138,7 +133,7 @@ public class RoutingMiddleware
             {
                 httpRequestMessage.Headers.Add(header.Key, header.Value.FirstOrDefault());
             }
-           
+
 
             context.Response.StatusCode = StatusCodes.Status200OK;
             await context.Response.WriteAsJsonAsync(new
@@ -158,6 +153,17 @@ public class RoutingMiddleware
             Error = "Url not supported"
         });
     }
+    private static async Task WriteHealthResponse(HttpContext context)
+    {
+        if (context.Request.Path != null && context.Request.Path.Equals("health", StringComparison.OrdinalIgnoreCase))
+        {
+            var healthStatus = new HealthStatus("Healthy", DateTime.UtcNow);
+            context.Response.StatusCode = StatusCodes.Status200OK;
+            await context.Response.WriteAsJsonAsync(healthStatus);
+            return;
+        }
+    }
 }
 
 record HealthStatus(string Status, DateTime CheckedAt);
+
