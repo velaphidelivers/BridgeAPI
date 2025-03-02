@@ -22,151 +22,117 @@ public class RoutingMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        if (context == null)
-        {
-            throw new ArgumentNullException(nameof(context));
-        }
+        if (context == null) throw new ArgumentNullException(nameof(context));
 
         var path = context.Request?.Path.Value?.Substring(1);
-        string appName = string.Empty;
-        string route = string.Empty;
-        var apiKey = _configuration.GetValue<string>("ApiKey");
-        var correlationId = context?.Request?.Headers["Correlation-Id"].ToString();
-        var client = new HttpClient();
+        if (string.IsNullOrEmpty(path)) ReturnForbidden(context);
 
-        //health calls
-        if (path != null && path.Equals("health", StringComparison.OrdinalIgnoreCase))
+        if (path.Equals("health", StringComparison.OrdinalIgnoreCase))
         {
-            var healthStatus = new HealthStatus("Healthy", DateTime.UtcNow);
-            context.Response.StatusCode = StatusCodes.Status200OK;
-            await context.Response.WriteAsJsonAsync(healthStatus);
+            await RespondWithHealthStatus(context);
             return;
         }
 
-        //authentication calls
-        if (context != null && path != null && path.Equals("Anonymous/Authenticate", StringComparison.OrdinalIgnoreCase))
+        if (!path.StartsWith("Secure", StringComparison.OrdinalIgnoreCase) && !path.StartsWith("Anonymous", StringComparison.OrdinalIgnoreCase))
         {
-            context.Response.StatusCode = StatusCodes.Status200OK;
-            await context.Response.WriteAsJsonAsync(new { });
+            ReturnForbidden(context);
             return;
         }
 
-        if (path != null && (path.StartsWith("Secure", StringComparison.OrdinalIgnoreCase) || path.StartsWith("Anonymous", StringComparison.OrdinalIgnoreCase)))
+        string appName = path.Equals("Anonymous/Authenticate", StringComparison.OrdinalIgnoreCase) ? "UserAuthApiBaseUrl" : string.Empty;
+        string route = path.Equals("Anonymous/Authenticate", StringComparison.OrdinalIgnoreCase) ? "Users/Login" : string.Empty;
+
+        if (!_allowedUrls.IsAllowed(path))
         {
-            if (path.Equals("Anonymous/Authenticate", StringComparison.OrdinalIgnoreCase))
-            {
-                appName = "UserAuthApiBaseUrl";
-                route = "Users/Login";
-            }
-            else if (!_allowedUrls.IsAllowed(path ?? string.Empty))
-            {
-                context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                await context.Response.WriteAsJsonAsync(new
-                {
-                    Error = "Url not supported"
-                });
-            }
-
-            var applicationToken = await _tokenService.GetToken(correlationId);
-
-            if (applicationToken?.Token == null)
-            {
-                throw new HttpException((int)ErrorCodes.TokenMalformedError, "The application token is null or malformed.");
-            }
-            var url = _configuration.GetValue<string>($"{appName}");
-
-            client.BaseAddress = new Uri(url ?? throw new HttpException((int)ErrorCodes.MissingConfigData, "BaseAddress configuration is missing."));
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", applicationToken.Token);
-            client.DefaultRequestHeaders.Add("x-api-key", apiKey);
-            client.DefaultRequestHeaders.Add("Correlation-Id", correlationId ?? Guid.NewGuid().ToString());
-
-            var httpRequestMessage = new HttpRequestMessage
-            {
-                Content = null,
-                Method = new HttpMethod(context.Request.Method)
-            };
-            if (new[] { "POST", "PATCH", "PUT", "DELETE", "HEAD" }.Contains(context.Request.Method))
-            {
-                if (context.Request.HasFormContentType)
-                {
-                    // Handle multipart/form-data content
-                    var formDataContent = new MultipartFormDataContent();
-
-                    foreach (var formFile in context.Request.Form.Files)
-                    {
-                        var fileContent = new StreamContent(formFile.OpenReadStream())
-                        {
-                            Headers =
-                            {
-                                ContentDisposition = new ContentDispositionHeaderValue("form-data")
-                                {
-                                    Name = formFile.Name,
-                                    FileName = formFile.FileName
-                                }
-                            }
-                        };
-                        fileContent.Headers.ContentType = new MediaTypeHeaderValue(formFile.ContentType);
-                        formDataContent.Add(fileContent);
-                    }
-
-                    foreach (var formField in context.Request.Form)
-                    {
-                        if (!context.Request.Form.Files.Any(f => f.Name == formField.Key))
-                        {
-                            var value = formField.Value.ToString();
-                            formDataContent.Add(new StringContent(value), formField.Key);
-                        }
-                    }
-
-                    httpRequestMessage.Content = formDataContent;
-                }
-                else
-                {
-                    var jsonBody = string.Empty;
-                    using (var reader = new StreamReader(context.Request.Body))
-                    {
-                        jsonBody = await reader.ReadToEndAsync();
-                    }
-                    httpRequestMessage.Content = new StringContent(jsonBody, Encoding.UTF8, context.Request.ContentType ?? "application/json");
-                }
-            }
-            var param = context.Request.Query;
-            var queryString = string.Join('&', param.Select(item => $"{item.Key}={System.Web.HttpUtility.UrlEncode(item.Value)}"));
-            var UrlEncode = string.Empty;
-            foreach (var piece in route.Split('/'))
-            {
-                if (UrlEncode.Length == 0)
-                    UrlEncode += $"{HttpUtility.UrlEncode(piece)}";
-                else
-                    UrlEncode += $"/{HttpUtility.UrlEncode(piece)}";
-
-            }
-            httpRequestMessage.RequestUri = new Uri($"{url}{UrlEncode}?{queryString}");
-
-            //populate headers
-            foreach (var header in context.Request.Headers)
-            {
-                httpRequestMessage.Headers.Add(header.Key, header.Value.FirstOrDefault());
-            }
-
-
-            context.Response.StatusCode = StatusCodes.Status200OK;
-            await context.Response.WriteAsJsonAsync(new
-            {
-                Debug = new
-                {
-                    httpRequestMessage.RequestUri,
-                    httpRequestMessage.Headers
-                }
-            });
+            ReturnForbidden(context);
             return;
         }
 
+        var applicationToken = await _tokenService.GetToken(context.Request.Headers["Correlation-Id"].ToString());
+        if (applicationToken?.Token == null)
+            throw new HttpException((int)ErrorCodes.TokenMalformedError, "The application token is null or malformed.");
+
+        var httpRequestMessage = BuildHttpRequest(context, applicationToken.Token, appName, route);
+
+        context.Response.StatusCode = StatusCodes.Status200OK;
+        await context.Response.WriteAsJsonAsync(new { Debug = new { httpRequestMessage.RequestUri, httpRequestMessage.Headers } });
+        return;
+    }
+
+    private static async Task RespondWithHealthStatus(HttpContext context)
+    {
+        var healthStatus = new HealthStatus("Healthy", DateTime.UtcNow);
+        context.Response.StatusCode = StatusCodes.Status200OK;
+        await context.Response.WriteAsJsonAsync(healthStatus);
+    }
+
+    private static void ReturnForbidden(HttpContext context)
+    {
         context.Response.StatusCode = StatusCodes.Status403Forbidden;
-        await context.Response.WriteAsJsonAsync(new
+        context.Response.WriteAsJsonAsync(new { Error = "Url not supported" });
+    }
+
+    private HttpRequestMessage BuildHttpRequest(HttpContext context, string token, string appName, string route)
+    {
+        var client = new HttpClient
         {
-            Error = "Url not supported"
-        });
+            BaseAddress = new Uri(_configuration.GetValue<string>($"{appName}") ?? throw new HttpException((int)ErrorCodes.MissingConfigData, "BaseAddress configuration is missing."))
+        };
+
+        var httpRequestMessage = new HttpRequestMessage { Method = new HttpMethod(context.Request.Method) };
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        client.DefaultRequestHeaders.Add("x-api-key", _configuration.GetValue<string>("ApiKey"));
+        client.DefaultRequestHeaders.Add("Correlation-Id", context.Request.Headers["Correlation-Id"].ToString() ?? Guid.NewGuid().ToString());
+
+        if (new[] { "POST", "PATCH", "PUT", "DELETE", "HEAD" }.Contains(context.Request.Method))
+        {
+            httpRequestMessage.Content = context.Request.HasFormContentType ? BuildMultipartContent(context) : BuildJsonContent(context);
+        }
+
+        var queryString = string.Join('&', context.Request.Query.Select(item => $"{item.Key}={HttpUtility.UrlEncode(item.Value)}"));
+        httpRequestMessage.RequestUri = new Uri($"{client.BaseAddress}{EncodeRoute(route)}?{queryString}");
+
+        foreach (var header in context.Request.Headers)
+        {
+            httpRequestMessage.Headers.Add(header.Key, header.Value.FirstOrDefault());
+        }
+
+        return httpRequestMessage;
+    }
+
+    private static MultipartFormDataContent BuildMultipartContent(HttpContext context)
+    {
+        var formDataContent = new MultipartFormDataContent();
+
+        foreach (var formFile in context.Request.Form.Files)
+        {
+            var fileContent = new StreamContent(formFile.OpenReadStream())
+            {
+                Headers = { ContentDisposition = new ContentDispositionHeaderValue("form-data") { Name = formFile.Name, FileName = formFile.FileName } }
+            };
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue(formFile.ContentType);
+            formDataContent.Add(fileContent);
+        }
+
+        foreach (var formField in context.Request.Form.Where(f => !context.Request.Form.Files.Any(file => file.Name == f.Key)))
+        {
+            formDataContent.Add(new StringContent(formField.Value.ToString()), formField.Key);
+        }
+
+        return formDataContent;
+    }
+
+    private static StringContent BuildJsonContent(HttpContext context)
+    {
+        using var reader = new StreamReader(context.Request.Body);
+        var jsonBody = reader.ReadToEndAsync().Result;
+        return new StringContent(jsonBody, Encoding.UTF8, context.Request.ContentType ?? "application/json");
+    }
+
+    private static string EncodeRoute(string route)
+    {
+        return string.Join("/", route.Split('/').Select(HttpUtility.UrlEncode));
     }
 }
 
