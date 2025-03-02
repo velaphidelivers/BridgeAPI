@@ -34,6 +34,7 @@ public class RoutingMiddleware
         var correlationId = context?.Request?.Headers["Correlation-Id"].ToString();
         var client = new HttpClient();
 
+        //health calls
         if (path != null && path.Equals("health", StringComparison.OrdinalIgnoreCase))
         {
             var healthStatus = new HealthStatus("Healthy", DateTime.UtcNow);
@@ -41,6 +42,14 @@ public class RoutingMiddleware
             await context.Response.WriteAsJsonAsync(healthStatus);
             return;
         }
+
+        //authentication calls
+        if (context != null && path != null && path.Equals("Anonymous/Authenticate", StringComparison.OrdinalIgnoreCase))
+        {
+            context.Response.StatusCode = StatusCodes.Status200OK;
+            await context.Response.WriteAsJsonAsync(new { });
+        }
+
         if (path != null && (path.StartsWith("Secure", StringComparison.OrdinalIgnoreCase) || path.StartsWith("Anonymous", StringComparison.OrdinalIgnoreCase)))
         {
             if (path.Equals("Anonymous/Authenticate", StringComparison.OrdinalIgnoreCase))
@@ -138,7 +147,7 @@ public class RoutingMiddleware
             {
                 httpRequestMessage.Headers.Add(header.Key, header.Value.FirstOrDefault());
             }
-           
+
 
             context.Response.StatusCode = StatusCodes.Status200OK;
             await context.Response.WriteAsJsonAsync(new
