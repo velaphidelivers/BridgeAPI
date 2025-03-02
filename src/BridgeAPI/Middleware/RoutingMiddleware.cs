@@ -54,8 +54,20 @@ public class RoutingMiddleware
 
         var httpRequestMessage = BuildHttpRequest(context, applicationToken.Token, appName, route);
 
-        context.Response.StatusCode = StatusCodes.Status200OK;
-        await context.Response.WriteAsJsonAsync(new { Debug = new { httpRequestMessage.RequestUri, httpRequestMessage.Headers } });
+        using var client = new HttpClient();
+        var response = await client.SendAsync(httpRequestMessage);
+        context.Response.StatusCode = (int)response.StatusCode;
+
+        foreach (var header in response.Headers)
+        {
+            context.Response.Headers[header.Key] = header.Value.ToArray();
+        }
+
+        var responseBody = await response.Content.ReadAsStringAsync();
+        await context.Response.WriteAsync(responseBody);
+        
+        /*  context.Response.StatusCode = StatusCodes.Status200OK;
+         await context.Response.WriteAsJsonAsync(new { Debug = new { httpRequestMessage.RequestUri, httpRequestMessage.Headers } }); */
         return;
     }
 
