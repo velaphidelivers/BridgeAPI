@@ -59,6 +59,7 @@ public class RoutingMiddleware
         var (client, httpRequestMessage) = BuildHttpRequest(context, applicationToken.Token, appName, route);
 
         Console.WriteLine($"[DEBUG] Sending request to: {httpRequestMessage?.RequestUri?.AbsolutePath}");
+        Console.WriteLine($"[DEBUG]HTTP Context Method: {context.Request.Method}");
         Console.WriteLine($"[DEBUG] Method: {httpRequestMessage.Method}");
         Console.WriteLine($"[DEBUG] Headers: {string.Join(", ", httpRequestMessage.Headers.Select(h => $"{h.Key}: {string.Join(", ", h.Value)}"))}");
         if (httpRequestMessage.Content != null)
