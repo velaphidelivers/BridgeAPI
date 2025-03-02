@@ -8,10 +8,12 @@ namespace Helpers
         private static readonly string[] Patterns =
         {
             @"^Users/\d+$",
-            @"^api/passwords/users/otp$" ,
-             @"^Users/Create$",
+            @"^api/passwords/users/otp$",
+            @"^Users/Create$",
             @"^api/passwords/user/\+\d{1,15}/otp/\d{4}/verify$",
-             @"^api/passwords/ChangePassword$"};
+            @"^api/passwords/ChangePassword$",
+            @"^Anonymous/Authenticate$" // Added new allowed endpoint
+        };
 
         private static readonly Regex[] CompiledPatterns = Patterns.Select(pattern => new Regex(pattern, RegexOptions.Compiled)).ToArray();
 
