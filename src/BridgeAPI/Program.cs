@@ -41,9 +41,11 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseCors();
 app.UseHttpsRedirection();
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseMiddleware<RoutingMiddleware>();
+app.UseRouting();
 //app.ConfigureExceptionHandler();
 
 app.Run();
