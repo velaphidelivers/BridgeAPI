@@ -52,7 +52,7 @@ public class RoutingMiddleware
         if (applicationToken?.Token == null)
             throw new HttpException((int)ErrorCodes.TokenMalformedError, "The application token is null or malformed.");
 
-        var httpRequestMessage = BuildHttpRequest(context, applicationToken.Token, appName, route);
+        var (client, httpRequestMessage) = BuildHttpRequest(context, applicationToken.Token, appName, route);
 
         Console.WriteLine($"[DEBUG] Sending request to: {httpRequestMessage.RequestUri}");
         Console.WriteLine($"[DEBUG] Method: {httpRequestMessage.Method}");
@@ -63,7 +63,6 @@ public class RoutingMiddleware
             Console.WriteLine($"[DEBUG] Body: {content}");
         }
 
-        using var client = new HttpClient();
         var response = await client.SendAsync(httpRequestMessage);
 
         Console.WriteLine($"[DEBUG] Response Status: {response.StatusCode}");
@@ -80,8 +79,6 @@ public class RoutingMiddleware
         }
 
         await context.Response.WriteAsync(responseBody);
-
-        return;
     }
 
     private static async Task RespondWithHealthStatus(HttpContext context)
@@ -97,14 +94,14 @@ public class RoutingMiddleware
         context.Response.WriteAsJsonAsync(new { Error = "Url not supported" });
     }
 
-    private HttpRequestMessage BuildHttpRequest(HttpContext context, string token, string appName, string route)
+    private (HttpClient, HttpRequestMessage) BuildHttpRequest(HttpContext context, string token, string appName, string route)
     {
         var client = new HttpClient
         {
             BaseAddress = new Uri(_configuration.GetValue<string>($"{appName}") ?? throw new HttpException((int)ErrorCodes.MissingConfigData, "BaseAddress configuration is missing."))
         };
 
-        var httpRequestMessage = new HttpRequestMessage { Method = new HttpMethod(context.Request.Method) };
+        var httpRequestMessage = new HttpRequestMessage(new HttpMethod(context.Request.Method), string.Empty);
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         client.DefaultRequestHeaders.Add("x-api-key", _configuration.GetValue<string>("ApiKey"));
@@ -123,28 +120,23 @@ public class RoutingMiddleware
             httpRequestMessage.Headers.Add(header.Key, header.Value.FirstOrDefault());
         }
 
-        return httpRequestMessage;
+        return (client, httpRequestMessage);
     }
 
     private static MultipartFormDataContent BuildMultipartContent(HttpContext context)
     {
         var formDataContent = new MultipartFormDataContent();
-
         foreach (var formFile in context.Request.Form.Files)
         {
-            var fileContent = new StreamContent(formFile.OpenReadStream())
-            {
-                Headers = { ContentDisposition = new ContentDispositionHeaderValue("form-data") { Name = formFile.Name, FileName = formFile.FileName } }
-            };
+            var fileContent = new StreamContent(formFile.OpenReadStream());
+            fileContent.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data") { Name = formFile.Name, FileName = formFile.FileName };
             fileContent.Headers.ContentType = new MediaTypeHeaderValue(formFile.ContentType);
             formDataContent.Add(fileContent);
         }
-
         foreach (var formField in context.Request.Form.Where(f => !context.Request.Form.Files.Any(file => file.Name == f.Key)))
         {
             formDataContent.Add(new StringContent(formField.Value.ToString()), formField.Key);
         }
-
         return formDataContent;
     }
 
