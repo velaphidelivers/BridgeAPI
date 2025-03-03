@@ -58,20 +58,10 @@ public class RoutingMiddleware
 
         var (client, httpRequestMessage) = BuildHttpRequest(context, applicationToken.Token, appName, route);
 
-        Console.WriteLine($"[DEBUG] Sending request to: {httpRequestMessage?.RequestUri?.AbsolutePath}");
-        Console.WriteLine($"[DEBUG]HTTP Context Method: {context.Request.Method}");
-        Console.WriteLine($"[DEBUG] Method: {httpRequestMessage.Method}");
-        Console.WriteLine($"[DEBUG] Headers: {string.Join(", ", httpRequestMessage.Headers.Select(h => $"{h.Key}: {string.Join(", ", h.Value)}"))}");
-        if (httpRequestMessage.Content != null)
-        {
-            var content = await httpRequestMessage.Content.ReadAsStringAsync();
-            Console.WriteLine($"[DEBUG] Body: {content}");
-        }
-
         client.DefaultRequestHeaders.Host = null;
         HttpResponseMessage? response = await client.SendAsync(httpRequestMessage);
 
-        if (response != null&& response.IsSuccessStatusCode) 
+        if (response != null && response.IsSuccessStatusCode)
         {
             string responseBody = string.Empty;
             context.Response.ContentType = response.Content?.Headers?.ContentType?.MediaType;
@@ -91,16 +81,6 @@ public class RoutingMiddleware
             context.Response.Headers.AccessControlAllowOrigin = "*";
             context.Response.Headers.AccessControlAllowHeaders = "*";
             context.Response.Headers.AccessControlAllowMethods = "*";
-
-
-            Console.WriteLine("Response:");
-            Console.WriteLine("StatusCode: " + (int)response.StatusCode);
-            Console.WriteLine("Headers:");
-            foreach (var header in response.Headers)
-            {
-                Console.WriteLine($"{header.Key}: {string.Join(", ", header.Value)}");
-            }
-            Console.WriteLine("Body: " + responseBody);
 
             await context.Response.WriteAsync(responseBody);
         }
