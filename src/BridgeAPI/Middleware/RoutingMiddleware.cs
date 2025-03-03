@@ -11,21 +11,34 @@ public class RoutingMiddleware
     private readonly IAllowedUrls _allowedUrls;
     private readonly IConfiguration _configuration;
     private readonly ITokenService _tokenService;
+    private readonly ILogger<RoutingMiddleware> _logger;
 
-    public RoutingMiddleware(RequestDelegate next, IAllowedUrls allowedUrls, IConfiguration configuration, ITokenService tokenService)
+    public RoutingMiddleware(RequestDelegate next, IAllowedUrls allowedUrls, IConfiguration configuration, ITokenService tokenService, ILogger<RoutingMiddleware> logger)
     {
         _next = next ?? throw new ArgumentNullException(nameof(next));
         _allowedUrls = allowedUrls;
         _configuration = configuration;
         _tokenService = tokenService;
+        _logger = logger;
     }
 
     public async Task InvokeAsync(HttpContext context)
     {
-        if (context == null) throw new ArgumentNullException(nameof(context));
+        if (context == null)
+        {
+            _logger.LogError("HttpContext is null");
+            throw new ArgumentNullException(nameof(context));
+        }
+
+        var correlationId = context.Request.Headers["Correlation-Id"].ToString() ?? Guid.NewGuid().ToString();
+        _logger.LogInformation("Processing request. CorrelationId: {CorrelationId}, Path: {Path}", correlationId, context.Request?.Path.Value);
 
         var path = context.Request?.Path.Value?.Substring(1);
-        if (string.IsNullOrEmpty(path)) ReturnForbidden(context);
+        if (string.IsNullOrEmpty(path))
+        {
+            _logger.LogWarning("Request path is empty or null. CorrelationId: {CorrelationId}", correlationId);
+            ReturnForbidden(context);
+        }
 
         if (path.Equals("health", StringComparison.OrdinalIgnoreCase))
         {
@@ -35,30 +48,37 @@ public class RoutingMiddleware
 
         if (!path.StartsWith("Secure", StringComparison.OrdinalIgnoreCase) && !path.StartsWith("Anonymous", StringComparison.OrdinalIgnoreCase))
         {
+            _logger.LogWarning("Request path {Path} is not allowed. CorrelationId: {CorrelationId}", path, correlationId);
             ReturnForbidden(context);
             return;
         }
 
         string appName = path.Equals("Anonymous/Authenticate", StringComparison.OrdinalIgnoreCase) ? "UserAuth" : path.Split("/")[1];
         string route = path.Equals("Anonymous/Authenticate", StringComparison.OrdinalIgnoreCase) ? "users/login" : path.Substring($"Secure/{path.Split("/")[1]}".Length + 1);
-        Console.WriteLine("App: " + appName + " Route: " + route);
+        _logger.LogDebug("App: {AppName}, Route: {Route}, CorrelationId: {CorrelationId}", appName, route, correlationId);
+
         if (!_allowedUrls.IsAllowed(route.ToLower()))
         {
+            _logger.LogWarning("Route {Route} is not allowed. CorrelationId: {CorrelationId}", route, correlationId);
             ReturnForbidden(context);
             return;
         }
 
         var applicationToken = await _tokenService.GetToken(context.Request.Headers["Correlation-Id"].ToString());
         if (applicationToken?.Token == null)
+        {
+            _logger.LogError("Application token is null or malformed. CorrelationId: {CorrelationId}", correlationId);
             throw new HttpException((int)ErrorCodes.TokenMalformedError, "The application token is null or malformed.");
+        }
 
-        var (client, httpRequestMessage) = BuildHttpRequest(context, applicationToken.Token, appName, route);
+        var (client, httpRequestMessage) = BuildHttpRequest(context, applicationToken.Token, appName, route, correlationId);
 
         client.DefaultRequestHeaders.Host = null;
         HttpResponseMessage? response = await client.SendAsync(httpRequestMessage);
 
         if (response != null && response.IsSuccessStatusCode)
         {
+            _logger.LogInformation("Successfully received response for route: {Route}. CorrelationId: {CorrelationId}", route, correlationId);
             string responseBody = string.Empty;
             context.Response.ContentType = response.Content?.Headers?.ContentType?.MediaType;
 
@@ -82,7 +102,7 @@ public class RoutingMiddleware
         }
         else
         {
-            // Handle case where response is null
+            _logger.LogError("Failed to receive a valid response for route: {Route}. CorrelationId: {CorrelationId}", route, correlationId);
             context.Response.StatusCode = StatusCodes.Status500InternalServerError;
             await context.Response.WriteAsync("Failed to receive a response from the upstream service.");
         }
@@ -102,8 +122,10 @@ public class RoutingMiddleware
         context.Response.WriteAsJsonAsync(new { Error = "Url not supported" });
     }
 
-    private (HttpClient, HttpRequestMessage) BuildHttpRequest(HttpContext context, string token, string appName, string route)
+    private (HttpClient, HttpRequestMessage) BuildHttpRequest(HttpContext context, string token, string appName, string route, string correlationId)
     {
+        _logger.LogDebug("Building HTTP request for app: {AppName}, route: {Route}. CorrelationId: {CorrelationId}", appName, route, correlationId);
+
         var client = new HttpClient
         {
             BaseAddress = new Uri(_configuration.GetValue<string>($"{appName}") ?? throw new HttpException((int)ErrorCodes.MissingConfigData, "BaseAddress configuration is missing."))
@@ -157,6 +179,7 @@ public class RoutingMiddleware
                 client.DefaultRequestHeaders.Add(header.Key, header.Value.FirstOrDefault());
         }
 
+        _logger.LogDebug("Completed building HTTP request for route: {Route}. CorrelationId: {CorrelationId}", route, correlationId);
         return (client, httpRequestMessage);
     }
 
