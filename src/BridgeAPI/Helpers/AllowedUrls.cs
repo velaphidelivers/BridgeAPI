@@ -13,7 +13,13 @@ namespace Helpers
             @"^users/login$", // Added new allowed endpoint
             @"^api/passwords/user/\+\d{1,15}/otp/\d{4}/verify$",
             @"^api/passwords/changepassword$",
-            @"^anonymous/authenticate$" 
+            @"^anonymous/authenticate$",
+            @"^api/orders/service-fee$", // New URLs
+            @"^api/restaurant/\d+$",
+            @"^api/restaurant/nearby$",
+            @"^api/restaurant/recommendations$",
+            @"^api/restaurant/menuitem/\d+$",
+            @"^api/orders/create-order$"
         };
 
         private static readonly Regex[] CompiledPatterns = Patterns.Select(pattern => new Regex(pattern, RegexOptions.Compiled)).ToArray();
