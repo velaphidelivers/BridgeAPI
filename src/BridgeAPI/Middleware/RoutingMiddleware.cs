@@ -1,12 +1,8 @@
-using System.Diagnostics;
 using System.Net.Http.Headers;
-using System.Net.Mime;
 using System.Text;
 using System.Web;
 using Errors;
 using Helpers.Interfaces;
-using Models;
-using Newtonsoft.Json.Linq;
 using Services.Interfaces;
 
 public class RoutingMiddleware
@@ -43,10 +39,10 @@ public class RoutingMiddleware
             return;
         }
 
-        string appName = path.Equals("Anonymous/Authenticate", StringComparison.OrdinalIgnoreCase) ? "UserAuthApiBaseUrl" : string.Empty;
-        string route = path.Equals("Anonymous/Authenticate", StringComparison.OrdinalIgnoreCase) ? "Users/Login" : string.Empty;
-
-        if (!_allowedUrls.IsAllowed(path))
+        string appName = path.Equals("Anonymous/Authenticate", StringComparison.OrdinalIgnoreCase) ? "UserAuth" : path.Split("/")[1];
+        string route = path.Equals("Anonymous/Authenticate", StringComparison.OrdinalIgnoreCase) ? "users/login" : path.Substring($"Secure/{path.Split("/")[1]}".Length + 1);
+        Console.WriteLine("App: " + appName + " Route: " + route);
+        if (!_allowedUrls.IsAllowed(route.ToLower()))
         {
             ReturnForbidden(context);
             return;
