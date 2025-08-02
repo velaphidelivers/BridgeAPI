@@ -15,6 +15,10 @@ namespace Helpers
             @"^api/passwords/changepassword$",
             @"^anonymous/authenticate$",
             @"^api/orders/service-fee$", // New URLs
+            @"^api/drivers/assign$",
+            @"^api/drivers/status/update$",
+            @"^api/drivers/deliver$",
+            @"^api/drivers/deliver(\?.*)?$",
             @"^api/restaurant/\d+$",
             @"^api/restaurant/nearby$",
             @"^api/restaurant/recommendations$",
