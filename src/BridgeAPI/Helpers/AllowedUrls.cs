@@ -19,6 +19,7 @@ namespace Helpers
             @"^api/drivers/status/update$",
             @"^api/drivers/deliver$",
             @"^api/drivers/deliver(\?.*)?$",
+            @"^api/drivers/\d+$",
             @"^api/restaurant/\d+$",
             @"^api/restaurant/nearby$",
             @"^api/restaurant/recommendations$",
