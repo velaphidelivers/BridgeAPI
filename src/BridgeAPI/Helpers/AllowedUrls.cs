@@ -24,7 +24,8 @@ namespace Helpers
             @"^api/restaurant/nearby$",
             @"^api/restaurant/recommendations$",
             @"^api/restaurant/menuitem/\d+$",
-            @"^api/orders/create-order$"
+            @"^api/orders/create-order$",
+            @"^api/drivers/\d+/performance$"
         };
 
         private static readonly Regex[] CompiledPatterns = Patterns.Select(pattern => new Regex(pattern, RegexOptions.Compiled)).ToArray();
