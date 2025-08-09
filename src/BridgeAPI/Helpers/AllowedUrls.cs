@@ -11,7 +11,7 @@ namespace Helpers
             @"^api/passwords/users/otp$",
             @"^users/create$",
             @"^users/login$", // Added new allowed endpoint
-            @"^api/passwords/user/\+\d{1,15}/otp/\d{4}/verify$",
+            @"^api/passwords/user/(?:\+|%2b)\d{1,15}/otp/(?:\d{4})?/verify$",
             @"^api/passwords/changepassword$",
             @"^anonymous/authenticate$",
             @"^api/orders/service-fee$", // New URLs
