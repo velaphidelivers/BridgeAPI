@@ -27,6 +27,7 @@ namespace Helpers
             @"^api/restaurant/recommendations$",
             @"^api/restaurant/menuitem/\d+$",
             @"^api/orders/create-order$",
+            @"^api/orders/quote$",
             @"^api/drivers/\d+/performance$"
         };
 
