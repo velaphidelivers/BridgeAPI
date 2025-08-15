@@ -28,6 +28,7 @@ namespace Helpers
             @"^api/restaurant/menuitem/\d+$",
             @"^api/orders/create-order$",
             @"^api/orders/quote$",
+            @"^api/orders/from-quote/[-a-fA-F0-9]{36}$", // Allow create from quote endpoint
             @"^api/drivers/\d+/performance$"
         };
 
